@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -7,21 +7,35 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Record, Client } from "@/types";
 
-interface AddRecordDialogProps {
+interface EditRecordDialogProps {
   open: boolean;
   onClose: () => void;
-  onAdd: (record: Record) => void;
+  onUpdate: (record: Record) => void;
+  record: Record;
   clients: Client[];
 }
 
-const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps) => {
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditRecordDialogProps) => {
+  const [date, setDate] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
   const [renewalStatus, setRenewalStatus] = useState<"Renewed" | "Canceled">("Renewed");
   const [vendorInvoiceNumber, setVendorInvoiceNumber] = useState<string>("");
   const [receivedCost, setReceivedCost] = useState<string>("");
   const [vendorCost, setVendorCost] = useState<string>("");
   const [paymentStatus, setPaymentStatus] = useState<"Paid" | "Pending">("Pending");
+
+  // Load record data when dialog opens
+  useEffect(() => {
+    if (record) {
+      setDate(record.date.toISOString().split('T')[0]);
+      setClientId(record.clientId);
+      setRenewalStatus(record.renewalStatus);
+      setVendorInvoiceNumber(record.vendorInvoiceNumber);
+      setReceivedCost(record.receivedCost.toString());
+      setVendorCost(record.vendorCost.toString());
+      setPaymentStatus(record.paymentStatus);
+    }
+  }, [record]);
 
   const calculateProfit = () => {
     const received = parseFloat(receivedCost) || 0;
@@ -32,8 +46,8 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newRecord: Record = {
-      id: "",  // This will be set by the parent component
+    const updatedRecord: Record = {
+      ...record,
       clientId,
       date: new Date(date),
       renewalStatus,
@@ -44,14 +58,14 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
       paymentStatus
     };
     
-    onAdd(newRecord);
+    onUpdate(updatedRecord);
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Add New Hosting Record</DialogTitle>
+          <DialogTitle>Edit Hosting Record</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
@@ -172,7 +186,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
           </div>
 
           <DialogFooter>
-            <Button type="submit">Add Record</Button>
+            <Button type="submit">Update Record</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -180,4 +194,4 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
   );
 };
 
-export default AddRecordDialog;
+export default EditRecordDialog;
