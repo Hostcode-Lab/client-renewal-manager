@@ -3,6 +3,12 @@ export type Client = {
   id: string;
   name: string;
   ipAddress: string;
+  platform: string;
+};
+
+export type Platform = {
+  id: string;
+  name: string;
 };
 
 export type Record = {

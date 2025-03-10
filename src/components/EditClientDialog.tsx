@@ -4,24 +4,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Client } from "@/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Client, Platform } from "@/types";
 
 interface EditClientDialogProps {
   open: boolean;
   onClose: () => void;
   onUpdate: (client: Client) => void;
   client: Client;
+  platforms: Platform[];
 }
 
-const EditClientDialog = ({ open, onClose, onUpdate, client }: EditClientDialogProps) => {
+const EditClientDialog = ({ open, onClose, onUpdate, client, platforms }: EditClientDialogProps) => {
   const [name, setName] = useState<string>("");
   const [ipAddress, setIpAddress] = useState<string>("");
+  const [platform, setPlatform] = useState<string>("");
 
   // Load client data when dialog opens or client changes
   useEffect(() => {
     if (client) {
       setName(client.name);
       setIpAddress(client.ipAddress);
+      setPlatform(client.platform || "");
     }
   }, [client, open]);
 
@@ -31,7 +35,8 @@ const EditClientDialog = ({ open, onClose, onUpdate, client }: EditClientDialogP
     const updatedClient: Client = {
       ...client,
       name,
-      ipAddress
+      ipAddress,
+      platform
     };
     
     onUpdate(updatedClient);
@@ -67,6 +72,22 @@ const EditClientDialog = ({ open, onClose, onUpdate, client }: EditClientDialogP
               placeholder="e.g. 192.168.1.1"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="platform">Platform</Label>
+            <Select value={platform} onValueChange={setPlatform} required>
+              <SelectTrigger id="platform">
+                <SelectValue placeholder="Select platform" />
+              </SelectTrigger>
+              <SelectContent>
+                {platforms.map((platform) => (
+                  <SelectItem key={platform.id} value={platform.id}>
+                    {platform.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <DialogFooter>

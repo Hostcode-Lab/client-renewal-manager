@@ -1,15 +1,26 @@
 
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import Layout from "@/components/Layout";
-import { ArrowUpIcon, ArrowDownIcon, Users, DollarSign, TrendingUp, Percent } from "lucide-react";
+import { ArrowUpIcon, ArrowDownIcon, Users, IndianRupee, TrendingUp, Percent } from "lucide-react";
+import { DashboardStats } from "@/types";
 
-// Temporary mock data - replace with real data later
-const stats = {
-  activeClients: 24,
-  monthlyRevenue: 4800,
-  monthlyProfit: 1200,
-  avgProfitPercentage: 25,
-  growthPercentage: 12.5,
+// Default stats if none are available
+const defaultStats: DashboardStats = {
+  activeClients: 0,
+  monthlyRevenue: 0,
+  monthlyProfit: 0,
+  avgProfitPercentage: 0,
+  growthPercentage: 0,
+};
+
+// Get stats from localStorage
+const getStoredStats = (): DashboardStats => {
+  const storedStats = localStorage.getItem('dashboardStats');
+  if (storedStats) {
+    return JSON.parse(storedStats);
+  }
+  return defaultStats;
 };
 
 const StatCard = ({ 
@@ -41,6 +52,24 @@ const StatCard = ({
 );
 
 const Index = () => {
+  const [stats, setStats] = useState<DashboardStats>(defaultStats);
+
+  useEffect(() => {
+    // Load initial stats
+    setStats(getStoredStats());
+
+    // Set up event listener for localStorage changes (in case records are updated)
+    const handleStorageChange = () => {
+      setStats(getStoredStats());
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -58,14 +87,14 @@ const Index = () => {
           <StatCard
             title="Monthly Revenue"
             value={stats.monthlyRevenue}
-            icon={DollarSign}
-            prefix="$"
+            icon={IndianRupee}
+            prefix="₹"
           />
           <StatCard
             title="Monthly Profit"
             value={stats.monthlyProfit}
             icon={TrendingUp}
-            prefix="$"
+            prefix="₹"
           />
           <StatCard
             title="Avg Profit Margin"
@@ -83,10 +112,14 @@ const Index = () => {
                 <ArrowUpIcon className="w-4 h-4" />
                 <span className="font-medium">{stats.growthPercentage}%</span>
               </div>
-            ) : (
+            ) : stats.growthPercentage < 0 ? (
               <div className="flex items-center text-red-600">
                 <ArrowDownIcon className="w-4 h-4" />
                 <span className="font-medium">{Math.abs(stats.growthPercentage)}%</span>
+              </div>
+            ) : (
+              <div className="flex items-center text-gray-600">
+                <span className="font-medium">0%</span>
               </div>
             )}
           </div>

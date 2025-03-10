@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import AddRecordDialog from "@/components/AddRecordDialog";
 import EditRecordDialog from "@/components/EditRecordDialog";
 import AddClientDialog from "@/components/AddClientDialog";
-import { Record, Client } from "@/types";
+import { Record, Client, Platform } from "@/types";
 import { 
   Select,
   SelectContent,
@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Link } from "react-router-dom";
 
 // Sample data - would be replaced with actual database data
 const sampleRecords: Record[] = [
@@ -33,9 +34,9 @@ const sampleRecords: Record[] = [
     date: new Date(2023, 9, 15),
     renewalStatus: "Renewed",
     vendorInvoiceNumber: "INV-2023-001",
-    receivedCost: 120,
-    vendorCost: 80,
-    totalProfit: 40,
+    receivedCost: 8400,
+    vendorCost: 5600,
+    totalProfit: 2800,
     paymentStatus: "Paid"
   },
   {
@@ -44,9 +45,9 @@ const sampleRecords: Record[] = [
     date: new Date(2023, 9, 18),
     renewalStatus: "Canceled",
     vendorInvoiceNumber: "INV-2023-002",
-    receivedCost: 150,
-    vendorCost: 100,
-    totalProfit: 50,
+    receivedCost: 10500,
+    vendorCost: 7000,
+    totalProfit: 3500,
     paymentStatus: "Pending"
   }
 ];
@@ -61,13 +62,27 @@ const getStoredClients = (): Client[] => {
     {
       id: "client1",
       name: "Client One",
-      ipAddress: "192.168.1.1"
+      ipAddress: "192.168.1.1",
+      platform: "platform1"
     },
     {
       id: "client2",
       name: "Client Two",
-      ipAddress: "192.168.1.2"
+      ipAddress: "192.168.1.2",
+      platform: "platform2"
     }
+  ];
+};
+
+// Get platforms from localStorage or use sample data
+const getStoredPlatforms = (): Platform[] => {
+  const storedPlatforms = localStorage.getItem('platforms');
+  if (storedPlatforms) {
+    return JSON.parse(storedPlatforms);
+  }
+  return [
+    { id: "platform1", name: "Hostcode" },
+    { id: "platform2", name: "Serverlize" }
   ];
 };
 
@@ -94,10 +109,66 @@ const saveClientsToStorage = (clients: Client[]) => {
   localStorage.setItem('clients', JSON.stringify(clients));
 };
 
+// Calculate dashboard stats based on records
+const calculateDashboardStats = (records: Record[], clients: Client[]) => {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  // Filter records for current month
+  const currentMonthRecords = records.filter(record => {
+    const recordMonth = record.date.getMonth();
+    const recordYear = record.date.getFullYear();
+    return recordMonth === currentMonth && recordYear === currentYear;
+  });
+  
+  // Filter records for previous month
+  const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+  const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+  const prevMonthRecords = records.filter(record => {
+    const recordMonth = record.date.getMonth();
+    const recordYear = record.date.getFullYear();
+    return recordMonth === prevMonth && recordYear === prevYear;
+  });
+  
+  // Count active (non-canceled) clients with records
+  const clientsWithRecords = new Set();
+  records.forEach(record => {
+    if (record.renewalStatus === "Renewed") {
+      clientsWithRecords.add(record.clientId);
+    }
+  });
+  
+  // Calculate monthly revenue, profit, etc.
+  const monthlyRevenue = currentMonthRecords.reduce((sum, record) => sum + record.receivedCost, 0);
+  const monthlyProfit = currentMonthRecords.reduce((sum, record) => sum + record.totalProfit, 0);
+  
+  let avgProfitPercentage = 0;
+  if (monthlyRevenue > 0) {
+    avgProfitPercentage = (monthlyProfit / monthlyRevenue) * 100;
+  }
+  
+  // Calculate growth percentage
+  const prevMonthRevenue = prevMonthRecords.reduce((sum, record) => sum + record.receivedCost, 0);
+  let growthPercentage = 0;
+  if (prevMonthRevenue > 0) {
+    growthPercentage = ((monthlyRevenue - prevMonthRevenue) / prevMonthRevenue) * 100;
+  }
+  
+  return {
+    activeClients: clientsWithRecords.size,
+    monthlyRevenue,
+    monthlyProfit,
+    avgProfitPercentage: Math.round(avgProfitPercentage * 100) / 100,
+    growthPercentage: Math.round(growthPercentage * 100) / 100
+  };
+};
+
 const Records = () => {
   const { toast } = useToast();
   const [records, setRecords] = useState<Record[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -107,11 +178,18 @@ const Records = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [isFiltered, setIsFiltered] = useState(false);
 
-  // Load clients and records from localStorage on component mount
+  // Load clients, platforms and records from localStorage on component mount
   useEffect(() => {
     setClients(getStoredClients());
+    setPlatforms(getStoredPlatforms());
     setRecords(getStoredRecords());
   }, []);
+
+  // Update dashboard stats when records or clients change
+  useEffect(() => {
+    const stats = calculateDashboardStats(records, clients);
+    localStorage.setItem('dashboardStats', JSON.stringify(stats));
+  }, [records, clients]);
 
   // Generate month options for select
   const months = [
@@ -144,6 +222,14 @@ const Records = () => {
   const getClientIpById = (clientId: string): string => {
     const client = clients.find(client => client.id === clientId);
     return client ? client.ipAddress : "N/A";
+  };
+
+  const getClientPlatformById = (clientId: string): string => {
+    const client = clients.find(client => client.id === clientId);
+    if (!client || !client.platform) return "N/A";
+    
+    const platform = platforms.find(p => p.id === client.platform);
+    return platform ? platform.name : "Unknown Platform";
   };
 
   const handleAddRecord = (newRecord: Record) => {
@@ -203,12 +289,13 @@ const Records = () => {
     const headers = [
       "Date", 
       "Client", 
-      "IP Address", 
+      "IP Address",
+      "Platform",
       "Renewal Status", 
       "Invoice #", 
-      "Received", 
-      "Cost", 
-      "Profit", 
+      "Received (₹)", 
+      "Cost (₹)", 
+      "Profit (₹)", 
       "Payment Status"
     ];
     
@@ -218,11 +305,12 @@ const Records = () => {
         record.date.toLocaleDateString(),
         getClientNameById(record.clientId),
         getClientIpById(record.clientId),
+        getClientPlatformById(record.clientId),
         record.renewalStatus,
         record.vendorInvoiceNumber,
-        record.receivedCost,
-        record.vendorCost,
-        record.totalProfit,
+        record.receivedCost.toFixed(2),
+        record.vendorCost.toFixed(2),
+        record.totalProfit.toFixed(2),
         record.paymentStatus
       ].join(","))
     ].join("\n");
@@ -266,6 +354,11 @@ const Records = () => {
             <p className="text-muted-foreground mt-2">View and manage your hosting records</p>
           </div>
           <div className="space-x-2 flex items-center">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/platforms">
+                Manage Platforms
+              </Link>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setIsAddClientDialogOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Add Client
@@ -341,11 +434,12 @@ const Records = () => {
                   <TableHead>Date</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>IP Address</TableHead>
+                  <TableHead>Platform</TableHead>
                   <TableHead>Renewal Status</TableHead>
                   <TableHead>Invoice #</TableHead>
-                  <TableHead className="text-right">Received ($)</TableHead>
-                  <TableHead className="text-right">Cost ($)</TableHead>
-                  <TableHead className="text-right">Profit ($)</TableHead>
+                  <TableHead className="text-right">Received (₹)</TableHead>
+                  <TableHead className="text-right">Cost (₹)</TableHead>
+                  <TableHead className="text-right">Profit (₹)</TableHead>
                   <TableHead>Payment Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -357,6 +451,7 @@ const Records = () => {
                       <TableCell>{record.date.toLocaleDateString()}</TableCell>
                       <TableCell>{getClientNameById(record.clientId)}</TableCell>
                       <TableCell>{getClientIpById(record.clientId)}</TableCell>
+                      <TableCell>{getClientPlatformById(record.clientId)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 text-xs rounded-full ${
                           record.renewalStatus === "Renewed" 
@@ -390,7 +485,7 @@ const Records = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-6 text-muted-foreground">
                       {isFiltered 
                         ? `No records found for ${months.find(m => m.value === filterMonth)?.label} ${filterYear}. Add your first record!`
                         : "No records found. Add your first record!"}
@@ -430,6 +525,7 @@ const Records = () => {
           open={isAddClientDialogOpen} 
           onClose={() => setIsAddClientDialogOpen(false)} 
           onAdd={handleAddClient}
+          platforms={platforms}
         />
       )}
     </Layout>

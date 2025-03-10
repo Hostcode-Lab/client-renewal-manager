@@ -4,31 +4,35 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Client } from "@/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Client, Platform } from "@/types";
 
 interface AddClientDialogProps {
   open: boolean;
   onClose: () => void;
   onAdd: (client: Client) => void;
+  platforms?: Platform[];
 }
 
-const AddClientDialog = ({ open, onClose, onAdd }: AddClientDialogProps) => {
+const AddClientDialog = ({ open, onClose, onAdd, platforms = [] }: AddClientDialogProps) => {
   const [name, setName] = useState<string>("");
   const [ipAddress, setIpAddress] = useState<string>("");
+  const [platform, setPlatform] = useState<string>("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     const newClient: Client = {
-      id: "",  // This will be set by the parent component
+      id: "", // This will be set by the parent component
       name,
-      ipAddress
+      ipAddress,
+      platform
     };
     
     onAdd(newClient);
-    // Reset form
     setName("");
     setIpAddress("");
+    setPlatform("");
   };
 
   return (
@@ -59,6 +63,24 @@ const AddClientDialog = ({ open, onClose, onAdd }: AddClientDialogProps) => {
               required
             />
           </div>
+
+          {platforms && platforms.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="platform">Platform</Label>
+              <Select value={platform} onValueChange={setPlatform} required>
+                <SelectTrigger id="platform">
+                  <SelectValue placeholder="Select platform" />
+                </SelectTrigger>
+                <SelectContent>
+                  {platforms.map((platform) => (
+                    <SelectItem key={platform.id} value={platform.id}>
+                      {platform.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="submit">Add Client</Button>

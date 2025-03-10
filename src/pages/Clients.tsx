@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { PlusIcon, Edit, Trash2 } from "lucide-react";
+import { PlusIcon, Edit, Trash2, Server } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -13,22 +13,25 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Client } from "@/types";
+import { Client, Platform } from "@/types";
 import AddClientDialog from "@/components/AddClientDialog";
 import EditClientDialog from "@/components/EditClientDialog";
 import DeleteClientDialog from "@/components/DeleteClientDialog";
+import { Link } from "react-router-dom";
 
 // Sample clients data
 const sampleClients: Client[] = [
   {
     id: "client1",
     name: "Client One",
-    ipAddress: "192.168.1.1"
+    ipAddress: "192.168.1.1",
+    platform: "platform1"
   },
   {
     id: "client2",
     name: "Client Two",
-    ipAddress: "192.168.1.2"
+    ipAddress: "192.168.1.2",
+    platform: "platform2"
   }
 ];
 
@@ -41,6 +44,18 @@ const getStoredClients = (): Client[] => {
   return sampleClients;
 };
 
+// Get platforms from localStorage or use sample data
+const getStoredPlatforms = (): Platform[] => {
+  const storedPlatforms = localStorage.getItem('platforms');
+  if (storedPlatforms) {
+    return JSON.parse(storedPlatforms);
+  }
+  return [
+    { id: "platform1", name: "Hostcode" },
+    { id: "platform2", name: "Serverlize" }
+  ];
+};
+
 // Save clients to localStorage
 const saveClientsToStorage = (clients: Client[]) => {
   localStorage.setItem('clients', JSON.stringify(clients));
@@ -49,15 +64,22 @@ const saveClientsToStorage = (clients: Client[]) => {
 const Clients = () => {
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
-  // Load clients from localStorage on component mount
+  // Load clients and platforms from localStorage on component mount
   useEffect(() => {
     setClients(getStoredClients());
+    setPlatforms(getStoredPlatforms());
   }, []);
+
+  const getPlatformNameById = (platformId: string): string => {
+    const platform = platforms.find(p => p.id === platformId);
+    return platform ? platform.name : "Unknown Platform";
+  };
 
   const handleAddClient = (newClient: Client) => {
     const updatedClients = [...clients, { ...newClient, id: Date.now().toString() }];
@@ -114,10 +136,18 @@ const Clients = () => {
             <h1 className="text-3xl font-bold">Clients</h1>
             <p className="text-muted-foreground mt-2">Manage your hosting clients</p>
           </div>
-          <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Add Client
-          </Button>
+          <div className="space-x-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/platforms">
+                <Server className="mr-2 h-4 w-4" />
+                Manage Platforms
+              </Link>
+            </Button>
+            <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Add Client
+            </Button>
+          </div>
         </div>
 
         <Card className="p-4">
@@ -127,6 +157,7 @@ const Clients = () => {
                 <TableRow>
                   <TableHead>Client Name</TableHead>
                   <TableHead>IP Address</TableHead>
+                  <TableHead>Platform</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -136,6 +167,7 @@ const Clients = () => {
                     <TableRow key={client.id}>
                       <TableCell className="font-medium">{client.name}</TableCell>
                       <TableCell>{client.ipAddress}</TableCell>
+                      <TableCell>{getPlatformNameById(client.platform || "")}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-2">
                           <Button variant="ghost" size="sm" onClick={() => handleEditClick(client)}>
@@ -150,7 +182,7 @@ const Clients = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
                       No clients found. Add your first client!
                     </TableCell>
                   </TableRow>
@@ -166,6 +198,7 @@ const Clients = () => {
           open={isAddDialogOpen} 
           onClose={() => setIsAddDialogOpen(false)} 
           onAdd={handleAddClient}
+          platforms={platforms}
         />
       )}
 
@@ -178,6 +211,7 @@ const Clients = () => {
           }} 
           onUpdate={handleEditClient}
           client={selectedClient}
+          platforms={platforms}
         />
       )}
 

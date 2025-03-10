@@ -47,6 +47,14 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
     onAdd(newRecord);
   };
 
+  // Get platform info for the selected client
+  const getClientPlatform = (clientId: string) => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client || !client.platform) return "";
+    
+    return client.platform;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
@@ -78,7 +86,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.name}
+                      {client.name} {client.platform ? `(${getClientPlatform(client.id)})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -116,7 +124,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="received">Received Cost ($)</Label>
+              <Label htmlFor="received">Received Cost (₹)</Label>
               <Input
                 id="received"
                 type="number"
@@ -129,7 +137,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cost">Vendor Cost ($)</Label>
+              <Label htmlFor="cost">Vendor Cost (₹)</Label>
               <Input
                 id="cost"
                 type="number"
@@ -145,7 +153,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="profit">Total Profit ($)</Label>
+              <Label htmlFor="profit">Total Profit (₹)</Label>
               <Input
                 id="profit"
                 type="number"

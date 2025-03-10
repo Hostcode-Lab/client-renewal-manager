@@ -43,6 +43,14 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
     return received - cost;
   };
 
+  // Get platform info for the selected client
+  const getClientPlatform = (clientId: string) => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client || !client.platform) return "";
+    
+    return client.platform;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -92,7 +100,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.name}
+                      {client.name} {client.platform ? `(${getClientPlatform(client.id)})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -130,7 +138,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="received">Received Cost ($)</Label>
+              <Label htmlFor="received">Received Cost (₹)</Label>
               <Input
                 id="received"
                 type="number"
@@ -143,7 +151,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cost">Vendor Cost ($)</Label>
+              <Label htmlFor="cost">Vendor Cost (₹)</Label>
               <Input
                 id="cost"
                 type="number"
@@ -159,7 +167,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="profit">Total Profit ($)</Label>
+              <Label htmlFor="profit">Total Profit (₹)</Label>
               <Input
                 id="profit"
                 type="number"
