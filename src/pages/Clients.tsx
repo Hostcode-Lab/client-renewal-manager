@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { PlusIcon, Edit, Trash2 } from "lucide-react";
@@ -32,16 +32,37 @@ const sampleClients: Client[] = [
   }
 ];
 
+// Get clients from localStorage or use sample data
+const getStoredClients = (): Client[] => {
+  const storedClients = localStorage.getItem('clients');
+  if (storedClients) {
+    return JSON.parse(storedClients);
+  }
+  return sampleClients;
+};
+
+// Save clients to localStorage
+const saveClientsToStorage = (clients: Client[]) => {
+  localStorage.setItem('clients', JSON.stringify(clients));
+};
+
 const Clients = () => {
   const { toast } = useToast();
-  const [clients, setClients] = useState<Client[]>(sampleClients);
+  const [clients, setClients] = useState<Client[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
+  // Load clients from localStorage on component mount
+  useEffect(() => {
+    setClients(getStoredClients());
+  }, []);
+
   const handleAddClient = (newClient: Client) => {
-    setClients([...clients, { ...newClient, id: Date.now().toString() }]);
+    const updatedClients = [...clients, { ...newClient, id: Date.now().toString() }];
+    setClients(updatedClients);
+    saveClientsToStorage(updatedClients);
     toast({
       title: "Client added",
       description: "The client has been added successfully.",
@@ -50,9 +71,11 @@ const Clients = () => {
   };
 
   const handleEditClient = (updatedClient: Client) => {
-    setClients(clients.map(client => 
+    const updatedClients = clients.map(client => 
       client.id === updatedClient.id ? updatedClient : client
-    ));
+    );
+    setClients(updatedClients);
+    saveClientsToStorage(updatedClients);
     toast({
       title: "Client updated",
       description: "The client has been updated successfully.",
@@ -62,7 +85,9 @@ const Clients = () => {
   };
 
   const handleDeleteClient = (clientId: string) => {
-    setClients(clients.filter(client => client.id !== clientId));
+    const updatedClients = clients.filter(client => client.id !== clientId);
+    setClients(updatedClients);
+    saveClientsToStorage(updatedClients);
     toast({
       title: "Client deleted",
       description: "The client has been deleted successfully.",

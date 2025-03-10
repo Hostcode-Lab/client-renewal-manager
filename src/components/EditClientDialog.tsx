@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -17,13 +17,13 @@ const EditClientDialog = ({ open, onClose, onUpdate, client }: EditClientDialogP
   const [name, setName] = useState<string>("");
   const [ipAddress, setIpAddress] = useState<string>("");
 
-  // Load client data when dialog opens
+  // Load client data when dialog opens or client changes
   useEffect(() => {
     if (client) {
       setName(client.name);
       setIpAddress(client.ipAddress);
     }
-  }, [client]);
+  }, [client, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +42,9 @@ const EditClientDialog = ({ open, onClose, onUpdate, client }: EditClientDialogP
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Edit Client</DialogTitle>
+          <DialogDescription>
+            Make changes to your client information here.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">

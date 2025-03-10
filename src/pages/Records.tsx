@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { PlusIcon, Download, Filter, Edit, UserPlus } from "lucide-react";
@@ -51,24 +51,53 @@ const sampleRecords: Record[] = [
   }
 ];
 
-// Sample clients data
-const sampleClients: Client[] = [
-  {
-    id: "client1",
-    name: "Client One",
-    ipAddress: "192.168.1.1"
-  },
-  {
-    id: "client2",
-    name: "Client Two",
-    ipAddress: "192.168.1.2"
+// Get clients from localStorage or use sample data
+const getStoredClients = (): Client[] => {
+  const storedClients = localStorage.getItem('clients');
+  if (storedClients) {
+    return JSON.parse(storedClients);
   }
-];
+  return [
+    {
+      id: "client1",
+      name: "Client One",
+      ipAddress: "192.168.1.1"
+    },
+    {
+      id: "client2",
+      name: "Client Two",
+      ipAddress: "192.168.1.2"
+    }
+  ];
+};
+
+// Get stored records from localStorage or use sample data
+const getStoredRecords = (): Record[] => {
+  const storedRecords = localStorage.getItem('records');
+  if (storedRecords) {
+    // Fix date objects as they're stored as strings in localStorage
+    return JSON.parse(storedRecords).map((record: any) => ({
+      ...record,
+      date: new Date(record.date)
+    }));
+  }
+  return sampleRecords;
+};
+
+// Save records to localStorage
+const saveRecordsToStorage = (records: Record[]) => {
+  localStorage.setItem('records', JSON.stringify(records));
+};
+
+// Save clients to localStorage
+const saveClientsToStorage = (clients: Client[]) => {
+  localStorage.setItem('clients', JSON.stringify(clients));
+};
 
 const Records = () => {
   const { toast } = useToast();
-  const [records, setRecords] = useState<Record[]>(sampleRecords);
-  const [clients, setClients] = useState<Client[]>(sampleClients);
+  const [records, setRecords] = useState<Record[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -76,6 +105,13 @@ const Records = () => {
   const [filterMonth, setFilterMonth] = useState<string>(new Date().getMonth().toString());
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [showFilters, setShowFilters] = useState(false);
+  const [isFiltered, setIsFiltered] = useState(false);
+
+  // Load clients and records from localStorage on component mount
+  useEffect(() => {
+    setClients(getStoredClients());
+    setRecords(getStoredRecords());
+  }, []);
 
   // Generate month options for select
   const months = [
@@ -111,7 +147,9 @@ const Records = () => {
   };
 
   const handleAddRecord = (newRecord: Record) => {
-    setRecords([...records, { ...newRecord, id: Date.now().toString() }]);
+    const updatedRecords = [...records, { ...newRecord, id: Date.now().toString() }];
+    setRecords(updatedRecords);
+    saveRecordsToStorage(updatedRecords);
     toast({
       title: "Record added",
       description: "The hosting record has been added successfully.",
@@ -120,9 +158,11 @@ const Records = () => {
   };
 
   const handleEditRecord = (updatedRecord: Record) => {
-    setRecords(records.map(record => 
+    const updatedRecords = records.map(record => 
       record.id === updatedRecord.id ? updatedRecord : record
-    ));
+    );
+    setRecords(updatedRecords);
+    saveRecordsToStorage(updatedRecords);
     toast({
       title: "Record updated",
       description: "The hosting record has been updated successfully.",
@@ -132,7 +172,9 @@ const Records = () => {
   };
 
   const handleAddClient = (newClient: Client) => {
-    setClients([...clients, { ...newClient, id: Date.now().toString() }]);
+    const updatedClients = [...clients, { ...newClient, id: Date.now().toString() }];
+    setClients(updatedClients);
+    saveClientsToStorage(updatedClients);
     toast({
       title: "Client added",
       description: "The client has been added successfully.",
@@ -143,6 +185,17 @@ const Records = () => {
   const handleEditClick = (record: Record) => {
     setSelectedRecord(record);
     setIsEditDialogOpen(true);
+  };
+
+  const applyFilters = () => {
+    setShowFilters(false);
+    setIsFiltered(true);
+  };
+
+  const clearFilters = () => {
+    setFilterMonth(new Date().getMonth().toString());
+    setFilterYear(new Date().getFullYear().toString());
+    setIsFiltered(false);
   };
 
   const exportToCSV = () => {
@@ -193,14 +246,14 @@ const Records = () => {
 
   // Filter records by month and year
   const filteredRecords = records.filter(record => {
-    if (!filterMonth && !filterYear) return true;
+    if (!isFiltered) return true;
     
     const recordMonth = record.date.getMonth().toString();
     const recordYear = record.date.getFullYear().toString();
     
     return (
-      (!filterMonth || recordMonth === filterMonth) && 
-      (!filterYear || recordYear === filterYear)
+      recordMonth === filterMonth && 
+      recordYear === filterYear
     );
   });
 
@@ -261,15 +314,22 @@ const Records = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setShowFilters(false)}>
+                  <Button variant="default" size="sm" onClick={applyFilters}>
                     Apply
                   </Button>
                 </>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => setShowFilters(true)}>
-                  <Filter className="mr-2 h-4 w-4" />
-                  Filter
-                </Button>
+                <div className="flex space-x-2">
+                  {isFiltered && (
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      Clear Filters
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setShowFilters(true)}>
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filter
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -331,7 +391,9 @@ const Records = () => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-6 text-muted-foreground">
-                      No records found for this period. Add your first record!
+                      {isFiltered 
+                        ? `No records found for ${months.find(m => m.value === filterMonth)?.label} ${filterYear}. Add your first record!`
+                        : "No records found. Add your first record!"}
                     </TableCell>
                   </TableRow>
                 )}
