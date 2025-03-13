@@ -1,15 +1,15 @@
 
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Users, FileSpreadsheet } from "lucide-react";
+import { LayoutDashboard, FileSpreadsheet, Users } from "lucide-react";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Clients", href: "/clients", icon: Users },
     { name: "Records", href: "/records", icon: FileSpreadsheet },
+    { name: "Clients", href: "/clients", icon: Users },
   ];
 
   return (
