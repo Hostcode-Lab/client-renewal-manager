@@ -76,9 +76,11 @@ const calculateDashboardStats = (records: Record[], period: { year: string, mont
   };
 };
 
-// Get pending payments
+// Get pending payments - updated to check renewalStatus and show vendorCost
 const getPendingPayments = (records: Record[]): Record[] => {
-  return records.filter(record => record.paymentStatus === "Pending");
+  return records.filter(record => 
+    record.paymentStatus === "Pending" && record.renewalStatus === "Renewed"
+  );
 };
 
 const StatCard = ({ 
@@ -174,8 +176,8 @@ const Index = () => {
     }
   }, [records, filterYear, filterMonth]);
 
-  // Total pending amount
-  const totalPendingAmount = pendingPayments.reduce((sum, record) => sum + record.receivedCost, 0);
+  // Total pending amount - updated to show vendorCost instead of receivedCost
+  const totalPendingAmount = pendingPayments.reduce((sum, record) => sum + record.vendorCost, 0);
 
   return (
     <Layout>
@@ -267,7 +269,7 @@ const Index = () => {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <AlertCircle className="mr-2 h-5 w-5 text-yellow-500" />
-                Pending Payments
+                Pending Vendor Payments
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -278,7 +280,7 @@ const Index = () => {
                     {pendingPayments.slice(0, 5).map((payment) => (
                       <div key={payment.id} className="flex justify-between items-center py-2 border-b">
                         <span>{getClientNameById(payment.clientId)}</span>
-                        <span className="font-medium">₹{payment.receivedCost.toLocaleString()}</span>
+                        <span className="font-medium">₹{payment.vendorCost.toLocaleString()}</span>
                       </div>
                     ))}
                     {pendingPayments.length > 5 && (

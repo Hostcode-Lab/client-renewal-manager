@@ -138,7 +138,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="received">Received Cost (₹)</Label>
+              <Label htmlFor="received">Received Amount (₹)</Label>
               <Input
                 id="received"
                 type="number"
