@@ -34,62 +34,129 @@ const Records = () => {
   const [filterMonth, setFilterMonth] = useState<string>(new Date().getMonth().toString());
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [isFiltered, setIsFiltered] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setClients(getStoredClients());
-    setPlatforms(getStoredPlatforms());
-    setRecords(getStoredRecords());
-  }, []);
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const clientsData = await getStoredClients();
+        const platformsData = await getStoredPlatforms();
+        const recordsData = await getStoredRecords();
+        
+        setClients(clientsData);
+        setPlatforms(platformsData);
+        setRecords(recordsData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast({
+          title: "Error loading data",
+          description: "There was a problem loading your data. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [toast]);
 
   useEffect(() => {
     const stats = calculateDashboardStats(records, clients);
     localStorage.setItem('dashboardStats', JSON.stringify(stats));
   }, [records, clients]);
 
-  const handleAddRecord = (newRecord: Record) => {
-    const updatedRecords = [...records, { ...newRecord, id: Date.now().toString() }];
+  const handleAddRecord = async (newRecord: Record) => {
+    const recordWithId = { ...newRecord, id: crypto.randomUUID() };
+    const updatedRecords = [...records, recordWithId];
     setRecords(updatedRecords);
-    saveRecordsToStorage(updatedRecords);
-    toast({
-      title: "Record added",
-      description: "The hosting record has been added successfully.",
-    });
+    
+    try {
+      await saveRecordsToStorage(updatedRecords);
+      toast({
+        title: "Record added",
+        description: "The hosting record has been added successfully.",
+      });
+    } catch (error) {
+      console.error("Error saving record:", error);
+      toast({
+        title: "Error saving record",
+        description: "There was a problem saving your record. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     setIsAddDialogOpen(false);
   };
 
-  const handleEditRecord = (updatedRecord: Record) => {
+  const handleEditRecord = async (updatedRecord: Record) => {
     const updatedRecords = records.map(record => 
       record.id === updatedRecord.id ? updatedRecord : record
     );
     setRecords(updatedRecords);
-    saveRecordsToStorage(updatedRecords);
-    toast({
-      title: "Record updated",
-      description: "The hosting record has been updated successfully.",
-    });
+    
+    try {
+      await saveRecordsToStorage(updatedRecords);
+      toast({
+        title: "Record updated",
+        description: "The hosting record has been updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating record:", error);
+      toast({
+        title: "Error updating record",
+        description: "There was a problem updating your record. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     setIsEditDialogOpen(false);
     setSelectedRecord(null);
   };
 
-  const handleDeleteRecord = (record: Record) => {
+  const handleDeleteRecord = async (record: Record) => {
     const updatedRecords = records.filter(r => r.id !== record.id);
     setRecords(updatedRecords);
-    saveRecordsToStorage(updatedRecords);
-    toast({
-      title: "Record deleted",
-      description: "The hosting record has been deleted successfully.",
-    });
+    
+    try {
+      await saveRecordsToStorage(updatedRecords);
+      toast({
+        title: "Record deleted",
+        description: "The hosting record has been deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting record:", error);
+      toast({
+        title: "Error deleting record",
+        description: "There was a problem deleting your record. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     setRecordToDelete(null);
   };
 
-  const handleAddClient = (newClient: Client) => {
-    const updatedClients = [...clients, { ...newClient, id: Date.now().toString() }];
+  const handleAddClient = async (newClient: Client) => {
+    const clientWithId = { ...newClient, id: crypto.randomUUID() };
+    const updatedClients = [...clients, clientWithId];
     setClients(updatedClients);
-    saveClientsToStorage(updatedClients);
-    toast({
-      title: "Client added",
-      description: "The client has been added successfully.",
-    });
+    
+    try {
+      await saveClientsToStorage(updatedClients);
+      toast({
+        title: "Client added",
+        description: "The client has been added successfully.",
+      });
+    } catch (error) {
+      console.error("Error adding client:", error);
+      toast({
+        title: "Error adding client",
+        description: "There was a problem adding your client. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     setIsAddClientDialogOpen(false);
   };
 
@@ -161,16 +228,22 @@ const Records = () => {
             clearFilters={clearFilters}
           />
 
-          <RecordsTable 
-            records={records}
-            isFiltered={isFiltered}
-            filterMonth={filterMonth}
-            filterYear={filterYear}
-            clients={clients}
-            platforms={platforms}
-            onEditClick={handleEditClick}
-            onDeleteClick={handleDeleteClick}
-          />
+          {isLoading ? (
+            <div className="flex justify-center items-center py-10">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <RecordsTable 
+              records={records}
+              isFiltered={isFiltered}
+              filterMonth={filterMonth}
+              filterYear={filterYear}
+              clients={clients}
+              platforms={platforms}
+              onEditClick={handleEditClick}
+              onDeleteClick={handleDeleteClick}
+            />
+          )}
         </Card>
       </div>
 
