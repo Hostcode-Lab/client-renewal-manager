@@ -1,62 +1,80 @@
 
 import { Link, useLocation } from "react-router-dom";
-import { cn } from "@/lib/utils";
-import { LayoutDashboard, FileSpreadsheet, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { BarChart2, Users, Database, Server, Settings, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-
-  const navigation = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Records", href: "/records", icon: FileSpreadsheet },
-    { name: "Clients", href: "/clients", icon: Users },
-  ];
+  const navigate = useNavigate();
+  
+  const handleLogout = () => {
+    localStorage.setItem("isAuthenticated", "false");
+    navigate("/login");
+  };
+  
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="flex min-h-screen">
       {/* Sidebar */}
-      <div className="hidden md:flex w-64 flex-col fixed inset-y-0">
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
-          <div className="flex-shrink-0 px-4 py-4 flex items-center">
-            <h1 className="text-xl font-semibold text-gray-900">Host Manager</h1>
-          </div>
-          <nav className="mt-5 flex-1 px-2 space-y-1">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    isActive
-                      ? "bg-primary text-white"
-                      : "text-gray-600 hover:bg-gray-50",
-                    "group flex items-center px-4 py-3 text-sm font-medium rounded-md transition-all duration-200"
-                  )}
-                >
-                  <item.icon
-                    className={cn(
-                      isActive ? "text-white" : "text-gray-400 group-hover:text-gray-500",
-                      "mr-3 h-5 w-5 flex-shrink-0 transition-colors duration-200"
-                    )}
-                  />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
+      <div className="w-64 bg-gray-900 text-white p-6">
+        <div className="mb-6">
+          <h1 className="text-xl font-bold">Host Manager</h1>
+        </div>
+        
+        <nav className="space-y-2">
+          <Link to="/">
+            <div className={`flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors ${isActive('/') ? 'bg-gray-800' : ''}`}>
+              <BarChart2 className="mr-3 h-5 w-5" />
+              <span>Dashboard</span>
+            </div>
+          </Link>
+          
+          <Link to="/records">
+            <div className={`flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors ${isActive('/records') ? 'bg-gray-800' : ''}`}>
+              <Database className="mr-3 h-5 w-5" />
+              <span>Records</span>
+            </div>
+          </Link>
+          
+          <Link to="/clients">
+            <div className={`flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors ${isActive('/clients') ? 'bg-gray-800' : ''}`}>
+              <Users className="mr-3 h-5 w-5" />
+              <span>Clients</span>
+            </div>
+          </Link>
+          
+          <Link to="/platforms">
+            <div className={`flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors ${isActive('/platforms') ? 'bg-gray-800' : ''}`}>
+              <Server className="mr-3 h-5 w-5" />
+              <span>Platforms</span>
+            </div>
+          </Link>
+          
+          <Link to="/settings">
+            <div className={`flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors ${isActive('/settings') ? 'bg-gray-800' : ''}`}>
+              <Settings className="mr-3 h-5 w-5" />
+              <span>Settings</span>
+            </div>
+          </Link>
+        </nav>
+        
+        <div className="mt-auto pt-6">
+          <Button variant="ghost" className="w-full justify-start text-white" onClick={handleLogout}>
+            <LogOut className="mr-3 h-5 w-5" />
+            <span>Logout</span>
+          </Button>
         </div>
       </div>
-
+      
       {/* Main content */}
-      <div className="md:pl-64 flex flex-col flex-1">
-        <main className="flex-1">
-          <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-              <div className="fade-in">{children}</div>
-            </div>
-          </div>
-        </main>
+      <div className="flex-1 bg-gray-50">
+        <div className="p-8">
+          {children}
+        </div>
       </div>
     </div>
   );

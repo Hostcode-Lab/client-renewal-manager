@@ -1,8 +1,7 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { PlusIcon, Download, Filter, Edit, UserPlus } from "lucide-react";
+import { PlusIcon, Download, Filter, Edit, UserPlus, Trash2 } from "lucide-react";
 import { 
   Table, 
   TableBody, 
@@ -25,8 +24,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Link } from "react-router-dom";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-// Sample data - would be replaced with actual database data
 const sampleRecords: Record[] = [
   {
     id: "1",
@@ -52,7 +61,6 @@ const sampleRecords: Record[] = [
   }
 ];
 
-// Get clients from localStorage or use sample data
 const getStoredClients = (): Client[] => {
   const storedClients = localStorage.getItem('clients');
   if (storedClients) {
@@ -74,7 +82,6 @@ const getStoredClients = (): Client[] => {
   ];
 };
 
-// Get platforms from localStorage or use sample data
 const getStoredPlatforms = (): Platform[] => {
   const storedPlatforms = localStorage.getItem('platforms');
   if (storedPlatforms) {
@@ -86,11 +93,9 @@ const getStoredPlatforms = (): Platform[] => {
   ];
 };
 
-// Get stored records from localStorage or use sample data
 const getStoredRecords = (): Record[] => {
   const storedRecords = localStorage.getItem('records');
   if (storedRecords) {
-    // Fix date objects as they're stored as strings in localStorage
     return JSON.parse(storedRecords).map((record: any) => ({
       ...record,
       date: new Date(record.date)
@@ -99,30 +104,25 @@ const getStoredRecords = (): Record[] => {
   return sampleRecords;
 };
 
-// Save records to localStorage
 const saveRecordsToStorage = (records: Record[]) => {
   localStorage.setItem('records', JSON.stringify(records));
 };
 
-// Save clients to localStorage
 const saveClientsToStorage = (clients: Client[]) => {
   localStorage.setItem('clients', JSON.stringify(clients));
 };
 
-// Calculate dashboard stats based on records
 const calculateDashboardStats = (records: Record[], clients: Client[]) => {
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
   
-  // Filter records for current month
   const currentMonthRecords = records.filter(record => {
     const recordMonth = record.date.getMonth();
     const recordYear = record.date.getFullYear();
     return recordMonth === currentMonth && recordYear === currentYear;
   });
   
-  // Filter records for previous month
   const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
   const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
   const prevMonthRecords = records.filter(record => {
@@ -131,7 +131,6 @@ const calculateDashboardStats = (records: Record[], clients: Client[]) => {
     return recordMonth === prevMonth && recordYear === prevYear;
   });
   
-  // Count active (non-canceled) clients with records
   const clientsWithRecords = new Set();
   records.forEach(record => {
     if (record.renewalStatus === "Renewed") {
@@ -139,7 +138,6 @@ const calculateDashboardStats = (records: Record[], clients: Client[]) => {
     }
   });
   
-  // Calculate monthly revenue, profit, etc.
   const monthlyRevenue = currentMonthRecords.reduce((sum, record) => sum + record.receivedCost, 0);
   const monthlyProfit = currentMonthRecords.reduce((sum, record) => sum + record.totalProfit, 0);
   
@@ -148,7 +146,6 @@ const calculateDashboardStats = (records: Record[], clients: Client[]) => {
     avgProfitPercentage = (monthlyProfit / monthlyRevenue) * 100;
   }
   
-  // Calculate growth percentage
   const prevMonthRevenue = prevMonthRecords.reduce((sum, record) => sum + record.receivedCost, 0);
   let growthPercentage = 0;
   if (prevMonthRevenue > 0) {
@@ -173,25 +170,23 @@ const Records = () => {
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<Record | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<Record | null>(null);
   const [filterMonth, setFilterMonth] = useState<string>(new Date().getMonth().toString());
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [showFilters, setShowFilters] = useState(false);
   const [isFiltered, setIsFiltered] = useState(false);
 
-  // Load clients, platforms and records from localStorage on component mount
   useEffect(() => {
     setClients(getStoredClients());
     setPlatforms(getStoredPlatforms());
     setRecords(getStoredRecords());
   }, []);
 
-  // Update dashboard stats when records or clients change
   useEffect(() => {
     const stats = calculateDashboardStats(records, clients);
     localStorage.setItem('dashboardStats', JSON.stringify(stats));
   }, [records, clients]);
 
-  // Generate month options for select
   const months = [
     { value: "0", label: "January" },
     { value: "1", label: "February" },
@@ -207,7 +202,6 @@ const Records = () => {
     { value: "11", label: "December" },
   ];
 
-  // Generate year options (last 5 years)
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => {
     const year = currentYear - i;
@@ -257,6 +251,17 @@ const Records = () => {
     setSelectedRecord(null);
   };
 
+  const handleDeleteRecord = (record: Record) => {
+    const updatedRecords = records.filter(r => r.id !== record.id);
+    setRecords(updatedRecords);
+    saveRecordsToStorage(updatedRecords);
+    toast({
+      title: "Record deleted",
+      description: "The hosting record has been deleted successfully.",
+    });
+    setRecordToDelete(null);
+  };
+
   const handleAddClient = (newClient: Client) => {
     const updatedClients = [...clients, { ...newClient, id: Date.now().toString() }];
     setClients(updatedClients);
@@ -273,6 +278,10 @@ const Records = () => {
     setIsEditDialogOpen(true);
   };
 
+  const handleDeleteClick = (record: Record) => {
+    setRecordToDelete(record);
+  };
+
   const applyFilters = () => {
     setShowFilters(false);
     setIsFiltered(true);
@@ -285,7 +294,6 @@ const Records = () => {
   };
 
   const exportToCSV = () => {
-    // Create CSV content
     const headers = [
       "Date", 
       "Client", 
@@ -315,7 +323,6 @@ const Records = () => {
       ].join(","))
     ].join("\n");
     
-    // Create download link
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -332,7 +339,6 @@ const Records = () => {
     });
   };
 
-  // Filter records by month and year
   const filteredRecords = records.filter(record => {
     if (!isFiltered) return true;
     
@@ -477,9 +483,14 @@ const Records = () => {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditClick(record)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex justify-end space-x-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditClick(record)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(record)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -528,6 +539,26 @@ const Records = () => {
           platforms={platforms}
         />
       )}
+
+      <AlertDialog open={!!recordToDelete} onOpenChange={(open) => !open && setRecordToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the record. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-red-500 hover:bg-red-600"
+              onClick={() => recordToDelete && handleDeleteRecord(recordToDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };
