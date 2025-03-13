@@ -3,14 +3,36 @@ import { Link, useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { BarChart2, Users, Database, Server, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { toast } = useToast();
   
-  const handleLogout = () => {
-    localStorage.setItem("isAuthenticated", "false");
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      // Logout from Supabase
+      await supabase.auth.signOut();
+      
+      // Clear local auth state
+      localStorage.setItem("isAuthenticated", "false");
+      
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+      
+      navigate("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast({
+        title: "Logout failed",
+        description: "An error occurred during logout",
+        variant: "destructive",
+      });
+    }
   };
   
   const isActive = (path: string) => {

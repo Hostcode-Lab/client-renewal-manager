@@ -6,60 +6,80 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Get stored credentials or use defaults
-  const getStoredCredentials = () => {
-    const storedUsername = localStorage.getItem("adminUsername");
-    const storedPassword = localStorage.getItem("adminPassword");
-    
-    return {
-      username: storedUsername || "admin",
-      password: storedPassword || "password123"
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate("/");
+      }
     };
-  };
+    
+    checkSession();
+  }, [navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    // Get current credentials
-    const credentials = getStoredCredentials();
-
-    // Simple authentication check
-    setTimeout(() => {
-      if (username === credentials.username && password === credentials.password) {
-        // Set authenticated status in localStorage
-        localStorage.setItem("isAuthenticated", "true");
+    
+    try {
+      // Try Supabase authentication first
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+      
+      if (error) {
+        // If Supabase auth fails, try local auth as fallback
+        const storedUsername = localStorage.getItem("adminUsername");
+        const storedPassword = localStorage.getItem("adminPassword");
+        const credentials = {
+          username: storedUsername || "admin",
+          password: storedPassword || "password123"
+        };
+        
+        if (email === credentials.username && password === credentials.password) {
+          localStorage.setItem("isAuthenticated", "true");
+          toast({
+            title: "Login successful",
+            description: "Welcome to Host Manager",
+          });
+          navigate("/");
+        } else {
+          toast({
+            title: "Login failed",
+            description: error.message || "Invalid credentials",
+            variant: "destructive",
+          });
+        }
+      } else if (data.session) {
         toast({
           title: "Login successful",
           description: "Welcome to Host Manager",
         });
+        localStorage.setItem("isAuthenticated", "true");
         navigate("/");
-      } else {
-        toast({
-          title: "Login failed",
-          description: "Invalid username or password",
-          variant: "destructive",
-        });
       }
+    } catch (error) {
+      console.error("Login error:", error);
+      toast({
+        title: "Login failed",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000); // Simulate network request
-  };
-
-  // Check if user is already logged in
-  useEffect(() => {
-    const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
-    if (isAuthenticated) {
-      navigate("/");
     }
-  }, [navigate]);
+  };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -73,12 +93,12 @@ const Login = () => {
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="email">Email/Username</Label>
               <Input 
-                id="username" 
-                placeholder="Enter your username" 
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email" 
+                placeholder="Enter your email or username" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
