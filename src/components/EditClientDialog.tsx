@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Client, Platform } from "@/types";
-import { getStoredPlatforms } from "@/utils/recordUtils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 interface EditClientDialogProps {
   open: boolean;
@@ -22,25 +23,56 @@ const EditClientDialog = ({ open, onClose, onUpdate, client, platforms }: EditCl
   const [platform, setPlatform] = useState<string>("");
   const [localPlatforms, setLocalPlatforms] = useState<Platform[]>(platforms);
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   // Ensure we always have the latest platforms
   useEffect(() => {
-    const fetchLatestPlatforms = async () => {
+    const fetchPlatforms = async () => {
       if (open) {
         setIsLoading(true);
         try {
-          const latestPlatforms = await getStoredPlatforms();
-          setLocalPlatforms(latestPlatforms);
+          const { data, error } = await supabase
+            .from('platforms')
+            .select('*');
+          
+          if (error) {
+            throw error;
+          }
+          
+          setLocalPlatforms(data);
         } catch (error) {
           console.error("Error fetching platforms:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load platforms. Please try again.",
+            variant: "destructive",
+          });
         } finally {
           setIsLoading(false);
         }
       }
     };
 
-    fetchLatestPlatforms();
-  }, [open]);
+    fetchPlatforms();
+    
+    // Set up real-time subscription for platforms
+    const platformSubscription = supabase
+      .channel('platform-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'platforms' },
+        (payload) => {
+          console.log('Platform change received:', payload);
+          // Refresh platforms list on any change
+          fetchPlatforms();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      platformSubscription.unsubscribe();
+    };
+  }, [open, toast]);
 
   // Update local platforms when prop changes
   useEffect(() => {
@@ -58,17 +90,52 @@ const EditClientDialog = ({ open, onClose, onUpdate, client, platforms }: EditCl
     }
   }, [client, open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const updatedClient: Client = {
-      ...client,
-      name,
-      ipAddress,
-      platform
-    };
-    
-    onUpdate(updatedClient);
+    try {
+      const updatedClient: Client = {
+        ...client,
+        name,
+        ipAddress,
+        platform
+      };
+      
+      // Update client in Supabase
+      const { error } = await supabase
+        .from('clients')
+        .update({
+          name: name,
+          ip_address: ipAddress,
+          platform: platform
+        })
+        .eq('id', client.id);
+      
+      if (error) {
+        console.error("Error updating client:", error);
+        toast({
+          title: "Error",
+          description: "Failed to update client. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Call onUpdate to update local state
+      onUpdate(updatedClient);
+      
+      toast({
+        title: "Success",
+        description: "Client updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating client:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update client. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

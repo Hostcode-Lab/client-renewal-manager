@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,8 @@ import AddClientDialog from "@/components/AddClientDialog";
 import EditClientDialog from "@/components/EditClientDialog";
 import DeleteClientDialog from "@/components/DeleteClientDialog";
 import { Link } from "react-router-dom";
-import { getStoredClients, getStoredPlatforms, saveClientsToStorage } from "@/utils/recordUtils";
 import { supabase } from "@/integrations/supabase/client";
+import { dbClientToClient, dbPlatformToPlatform } from "@/utils/recordUtils";
 
 const Clients = () => {
   const { toast } = useToast();
@@ -31,15 +32,32 @@ const Clients = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadData = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [clientsData, platformsData] = await Promise.all([
-          getStoredClients(),
-          getStoredPlatforms()
-        ]);
-        setClients(clientsData);
-        setPlatforms(platformsData);
+        // Fetch clients directly from Supabase
+        const { data: clientsData, error: clientsError } = await supabase
+          .from('clients')
+          .select('*');
+        
+        if (clientsError) {
+          throw clientsError;
+        }
+        
+        const formattedClients = clientsData.map(dbClientToClient);
+        setClients(formattedClients);
+        
+        // Fetch platforms
+        const { data: platformsData, error: platformsError } = await supabase
+          .from('platforms')
+          .select('*');
+        
+        if (platformsError) {
+          throw platformsError;
+        }
+        
+        const formattedPlatforms = platformsData.map(dbPlatformToPlatform);
+        setPlatforms(formattedPlatforms);
       } catch (error) {
         console.error("Error loading data:", error);
         toast({
@@ -52,28 +70,40 @@ const Clients = () => {
       }
     };
 
-    loadData();
+    fetchData();
 
+    // Set up real-time subscription for platforms
     const platformsChannel = supabase
-      .channel('platform-changes')
+      .channel('platforms-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'platforms' },
-        async () => {
-          const updatedPlatforms = await getStoredPlatforms();
-          setPlatforms(updatedPlatforms);
+        async (payload) => {
+          console.log('Platform change received:', payload);
+          // Fetch updated platforms
+          const { data } = await supabase.from('platforms').select('*');
+          if (data) {
+            const formattedPlatforms = data.map(dbPlatformToPlatform);
+            setPlatforms(formattedPlatforms);
+          }
         }
       )
       .subscribe();
 
+    // Set up real-time subscription for clients
     const clientsChannel = supabase
-      .channel('client-changes')
+      .channel('clients-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'clients' },
-        async () => {
-          const updatedClients = await getStoredClients();
-          setClients(updatedClients);
+        async (payload) => {
+          console.log('Client change received:', payload);
+          // Fetch updated clients
+          const { data } = await supabase.from('clients').select('*');
+          if (data) {
+            const formattedClients = data.map(dbClientToClient);
+            setClients(formattedClients);
+          }
         }
       )
       .subscribe();
@@ -90,71 +120,30 @@ const Clients = () => {
   };
 
   const handleAddClient = async (newClient: Client) => {
-    try {
-      const clientWithId = { ...newClient, id: Date.now().toString() };
-      const updatedClients = [...clients, clientWithId];
-      setClients(updatedClients);
-      await saveClientsToStorage(updatedClients);
-      
-      toast({
-        title: "Client added",
-        description: "The client has been added successfully.",
-      });
-      setIsAddDialogOpen(false);
-    } catch (error) {
-      console.error("Error adding client:", error);
-      toast({
-        title: "Error adding client",
-        description: "There was a problem adding the client.",
-        variant: "destructive"
-      });
-    }
+    // The database operation is already done in the AddClientDialog component
+    // Here we just update the local state
+    setClients(prev => [...prev, newClient]);
+    setIsAddDialogOpen(false);
   };
 
   const handleEditClient = async (updatedClient: Client) => {
-    try {
-      const updatedClients = clients.map(client => 
-        client.id === updatedClient.id ? updatedClient : client
-      );
-      setClients(updatedClients);
-      await saveClientsToStorage(updatedClients);
-      
-      toast({
-        title: "Client updated",
-        description: "The client has been updated successfully.",
-      });
-      setIsEditDialogOpen(false);
-      setSelectedClient(null);
-    } catch (error) {
-      console.error("Error updating client:", error);
-      toast({
-        title: "Error updating client",
-        description: "There was a problem updating the client.",
-        variant: "destructive"
-      });
-    }
+    // The database operation is already done in the EditClientDialog component
+    // Here we just update the local state
+    setClients(prev => 
+      prev.map(client => client.id === updatedClient.id ? updatedClient : client)
+    );
+    setIsEditDialogOpen(false);
+    setSelectedClient(null);
   };
 
-  const handleDeleteClient = async (clientId: string) => {
-    try {
-      const updatedClients = clients.filter(client => client.id !== clientId);
-      setClients(updatedClients);
-      await saveClientsToStorage(updatedClients);
-      
-      toast({
-        title: "Client deleted",
-        description: "The client has been deleted successfully.",
-      });
-      setIsDeleteDialogOpen(false);
-      setSelectedClient(null);
-    } catch (error) {
-      console.error("Error deleting client:", error);
-      toast({
-        title: "Error deleting client",
-        description: "There was a problem deleting the client.",
-        variant: "destructive"
-      });
+  const handleDeleteClient = async () => {
+    // The database operation is already done in the DeleteClientDialog component
+    // Here we just update the local state if needed
+    if (selectedClient) {
+      setClients(prev => prev.filter(client => client.id !== selectedClient.id));
     }
+    setIsDeleteDialogOpen(false);
+    setSelectedClient(null);
   };
 
   const handleEditClick = (client: Client) => {
@@ -265,8 +254,9 @@ const Clients = () => {
             setIsDeleteDialogOpen(false);
             setSelectedClient(null);
           }} 
-          onDelete={() => handleDeleteClient(selectedClient.id)}
+          onDelete={handleDeleteClient}
           clientName={selectedClient.name}
+          clientId={selectedClient.id}
         />
       )}
     </Layout>

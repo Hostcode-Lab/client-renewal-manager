@@ -80,20 +80,61 @@ const AddClientDialog = ({ open, onClose, onAdd, platforms = [] }: AddClientDial
     }
   }, [platforms]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newClient: Client = {
-      id: "", // This will be set by the parent component
-      name,
-      ipAddress,
-      platform
-    };
-    
-    onAdd(newClient);
-    setName("");
-    setIpAddress("");
-    setPlatform("");
+    try {
+      // Generate a UUID for the client
+      const clientId = crypto.randomUUID();
+
+      // Create new client object
+      const newClient: Client = {
+        id: clientId,
+        name,
+        ipAddress,
+        platform
+      };
+      
+      // Insert client directly into Supabase
+      const { error } = await supabase
+        .from('clients')
+        .insert({
+          id: clientId,
+          name: name,
+          ip_address: ipAddress,
+          platform: platform
+        });
+      
+      if (error) {
+        console.error("Error inserting client:", error);
+        toast({
+          title: "Error",
+          description: "Failed to add client. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Call onAdd to update local state and UI
+      onAdd(newClient);
+      
+      // Reset form
+      setName("");
+      setIpAddress("");
+      setPlatform("");
+      
+      toast({
+        title: "Success",
+        description: "Client added successfully.",
+      });
+    } catch (error) {
+      console.error("Error adding client:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add client. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDialogClose = () => {
