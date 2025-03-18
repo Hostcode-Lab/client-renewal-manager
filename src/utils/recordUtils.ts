@@ -166,11 +166,16 @@ export const saveClientsToStorage = async (clients: Client[]): Promise<void> => 
     // Then try to save to Supabase
     for (const client of clients) {
       // Check if client already exists in Supabase
-      const { data: existingClient } = await supabase
+      const { data: existingClient, error: checkError } = await supabase
         .from('clients')
         .select('id')
         .eq('id', client.id)
-        .single();
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error("Error checking client existence:", checkError);
+        continue;
+      }
       
       if (existingClient) {
         // Update existing client
@@ -194,6 +199,7 @@ export const saveClientsToStorage = async (clients: Client[]): Promise<void> => 
     }
   } catch (error) {
     console.error("Error in saveClientsToStorage:", error);
+    throw error;
   }
 };
 
@@ -205,11 +211,16 @@ export const savePlatformsToStorage = async (platforms: Platform[]): Promise<voi
     // Then try to save to Supabase
     for (const platform of platforms) {
       // Check if platform already exists in Supabase
-      const { data: existingPlatform } = await supabase
+      const { data: existingPlatform, error: checkError } = await supabase
         .from('platforms')
         .select('id')
         .eq('id', platform.id)
         .maybeSingle();
+      
+      if (checkError) {
+        console.error("Error checking platform existence:", checkError);
+        continue;
+      }
       
       if (existingPlatform) {
         // Update existing platform

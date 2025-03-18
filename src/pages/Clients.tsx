@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -18,48 +17,8 @@ import AddClientDialog from "@/components/AddClientDialog";
 import EditClientDialog from "@/components/EditClientDialog";
 import DeleteClientDialog from "@/components/DeleteClientDialog";
 import { Link } from "react-router-dom";
-
-// Sample clients data
-const sampleClients: Client[] = [
-  {
-    id: "client1",
-    name: "Client One",
-    ipAddress: "192.168.1.1",
-    platform: "platform1"
-  },
-  {
-    id: "client2",
-    name: "Client Two",
-    ipAddress: "192.168.1.2",
-    platform: "platform2"
-  }
-];
-
-// Get clients from localStorage or use sample data
-const getStoredClients = (): Client[] => {
-  const storedClients = localStorage.getItem('clients');
-  if (storedClients) {
-    return JSON.parse(storedClients);
-  }
-  return sampleClients;
-};
-
-// Get platforms from localStorage or use sample data
-const getStoredPlatforms = (): Platform[] => {
-  const storedPlatforms = localStorage.getItem('platforms');
-  if (storedPlatforms) {
-    return JSON.parse(storedPlatforms);
-  }
-  return [
-    { id: "platform1", name: "Hostcode" },
-    { id: "platform2", name: "Serverlize" }
-  ];
-};
-
-// Save clients to localStorage
-const saveClientsToStorage = (clients: Client[]) => {
-  localStorage.setItem('clients', JSON.stringify(clients));
-};
+import { getStoredClients, getStoredPlatforms, saveClientsToStorage } from "@/utils/recordUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 const Clients = () => {
   const { toast } = useToast();
@@ -69,53 +28,133 @@ const Clients = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load clients and platforms from localStorage on component mount
   useEffect(() => {
-    setClients(getStoredClients());
-    setPlatforms(getStoredPlatforms());
-  }, []);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const [clientsData, platformsData] = await Promise.all([
+          getStoredClients(),
+          getStoredPlatforms()
+        ]);
+        setClients(clientsData);
+        setPlatforms(platformsData);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast({
+          title: "Error loading data",
+          description: "There was a problem loading clients and platforms.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+
+    const platformsChannel = supabase
+      .channel('platform-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'platforms' },
+        async () => {
+          const updatedPlatforms = await getStoredPlatforms();
+          setPlatforms(updatedPlatforms);
+        }
+      )
+      .subscribe();
+
+    const clientsChannel = supabase
+      .channel('client-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clients' },
+        async () => {
+          const updatedClients = await getStoredClients();
+          setClients(updatedClients);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(platformsChannel);
+      supabase.removeChannel(clientsChannel);
+    };
+  }, [toast]);
 
   const getPlatformNameById = (platformId: string): string => {
     const platform = platforms.find(p => p.id === platformId);
     return platform ? platform.name : "Unknown Platform";
   };
 
-  const handleAddClient = (newClient: Client) => {
-    const updatedClients = [...clients, { ...newClient, id: Date.now().toString() }];
-    setClients(updatedClients);
-    saveClientsToStorage(updatedClients);
-    toast({
-      title: "Client added",
-      description: "The client has been added successfully.",
-    });
-    setIsAddDialogOpen(false);
+  const handleAddClient = async (newClient: Client) => {
+    try {
+      const clientWithId = { ...newClient, id: Date.now().toString() };
+      const updatedClients = [...clients, clientWithId];
+      setClients(updatedClients);
+      await saveClientsToStorage(updatedClients);
+      
+      toast({
+        title: "Client added",
+        description: "The client has been added successfully.",
+      });
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding client:", error);
+      toast({
+        title: "Error adding client",
+        description: "There was a problem adding the client.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleEditClient = (updatedClient: Client) => {
-    const updatedClients = clients.map(client => 
-      client.id === updatedClient.id ? updatedClient : client
-    );
-    setClients(updatedClients);
-    saveClientsToStorage(updatedClients);
-    toast({
-      title: "Client updated",
-      description: "The client has been updated successfully.",
-    });
-    setIsEditDialogOpen(false);
-    setSelectedClient(null);
+  const handleEditClient = async (updatedClient: Client) => {
+    try {
+      const updatedClients = clients.map(client => 
+        client.id === updatedClient.id ? updatedClient : client
+      );
+      setClients(updatedClients);
+      await saveClientsToStorage(updatedClients);
+      
+      toast({
+        title: "Client updated",
+        description: "The client has been updated successfully.",
+      });
+      setIsEditDialogOpen(false);
+      setSelectedClient(null);
+    } catch (error) {
+      console.error("Error updating client:", error);
+      toast({
+        title: "Error updating client",
+        description: "There was a problem updating the client.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeleteClient = (clientId: string) => {
-    const updatedClients = clients.filter(client => client.id !== clientId);
-    setClients(updatedClients);
-    saveClientsToStorage(updatedClients);
-    toast({
-      title: "Client deleted",
-      description: "The client has been deleted successfully.",
-    });
-    setIsDeleteDialogOpen(false);
-    setSelectedClient(null);
+  const handleDeleteClient = async (clientId: string) => {
+    try {
+      const updatedClients = clients.filter(client => client.id !== clientId);
+      setClients(updatedClients);
+      await saveClientsToStorage(updatedClients);
+      
+      toast({
+        title: "Client deleted",
+        description: "The client has been deleted successfully.",
+      });
+      setIsDeleteDialogOpen(false);
+      setSelectedClient(null);
+    } catch (error) {
+      console.error("Error deleting client:", error);
+      toast({
+        title: "Error deleting client",
+        description: "There was a problem deleting the client.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleEditClick = (client: Client) => {
@@ -151,45 +190,49 @@ const Clients = () => {
         </div>
 
         <Card className="p-4">
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Client Name</TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Platform</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clients.length > 0 ? (
-                  clients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium">{client.name}</TableCell>
-                      <TableCell>{client.ipAddress}</TableCell>
-                      <TableCell>{getPlatformNameById(client.platform || "")}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditClick(client)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(client)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+          {isLoading ? (
+            <div className="text-center py-6">Loading clients...</div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead>IP Address</TableHead>
+                    <TableHead>Platform</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clients.length > 0 ? (
+                    clients.map((client) => (
+                      <TableRow key={client.id}>
+                        <TableCell className="font-medium">{client.name}</TableCell>
+                        <TableCell>{client.ipAddress}</TableCell>
+                        <TableCell>{getPlatformNameById(client.platform || "")}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end space-x-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditClick(client)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(client)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                        No clients found. Add your first client!
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
-                      No clients found. Add your first client!
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </Card>
       </div>
 

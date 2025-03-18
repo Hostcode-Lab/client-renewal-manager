@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Client, Platform } from "@/types";
+import { getStoredPlatforms } from "@/utils/recordUtils";
 
 interface EditClientDialogProps {
   open: boolean;
@@ -19,6 +20,34 @@ const EditClientDialog = ({ open, onClose, onUpdate, client, platforms }: EditCl
   const [name, setName] = useState<string>("");
   const [ipAddress, setIpAddress] = useState<string>("");
   const [platform, setPlatform] = useState<string>("");
+  const [localPlatforms, setLocalPlatforms] = useState<Platform[]>(platforms);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Ensure we always have the latest platforms
+  useEffect(() => {
+    const fetchLatestPlatforms = async () => {
+      if (open) {
+        setIsLoading(true);
+        try {
+          const latestPlatforms = await getStoredPlatforms();
+          setLocalPlatforms(latestPlatforms);
+        } catch (error) {
+          console.error("Error fetching platforms:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchLatestPlatforms();
+  }, [open]);
+
+  // Update local platforms when prop changes
+  useEffect(() => {
+    if (platforms.length > 0) {
+      setLocalPlatforms(platforms);
+    }
+  }, [platforms]);
 
   // Load client data when dialog opens or client changes
   useEffect(() => {
@@ -76,22 +105,26 @@ const EditClientDialog = ({ open, onClose, onUpdate, client, platforms }: EditCl
 
           <div className="space-y-2">
             <Label htmlFor="platform">Platform</Label>
-            <Select value={platform} onValueChange={setPlatform} required>
-              <SelectTrigger id="platform">
-                <SelectValue placeholder="Select platform" />
-              </SelectTrigger>
-              <SelectContent>
-                {platforms.map((platform) => (
-                  <SelectItem key={platform.id} value={platform.id}>
-                    {platform.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground py-2">Loading platforms...</div>
+            ) : (
+              <Select value={platform} onValueChange={setPlatform} required>
+                <SelectTrigger id="platform">
+                  <SelectValue placeholder="Select platform" />
+                </SelectTrigger>
+                <SelectContent>
+                  {localPlatforms.map((platform) => (
+                    <SelectItem key={platform.id} value={platform.id}>
+                      {platform.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <DialogFooter>
-            <Button type="submit">Update Client</Button>
+            <Button type="submit" disabled={isLoading}>Update Client</Button>
           </DialogFooter>
         </form>
       </DialogContent>
