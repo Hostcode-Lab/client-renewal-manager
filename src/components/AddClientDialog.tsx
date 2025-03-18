@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Client, Platform } from "@/types";
-import { getStoredPlatforms } from "@/utils/recordUtils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 interface AddClientDialogProps {
   open: boolean;
@@ -21,25 +22,56 @@ const AddClientDialog = ({ open, onClose, onAdd, platforms = [] }: AddClientDial
   const [platform, setPlatform] = useState<string>("");
   const [localPlatforms, setLocalPlatforms] = useState<Platform[]>(platforms);
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  // Ensure we always have the latest platforms
+  // Fetch platforms when dialog opens
   useEffect(() => {
-    const fetchLatestPlatforms = async () => {
+    const fetchPlatforms = async () => {
       if (open) {
         setIsLoading(true);
         try {
-          const latestPlatforms = await getStoredPlatforms();
-          setLocalPlatforms(latestPlatforms);
+          const { data, error } = await supabase
+            .from('platforms')
+            .select('*');
+          
+          if (error) {
+            throw error;
+          }
+          
+          setLocalPlatforms(data);
         } catch (error) {
           console.error("Error fetching platforms:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load platforms. Please try again.",
+            variant: "destructive",
+          });
         } finally {
           setIsLoading(false);
         }
       }
     };
 
-    fetchLatestPlatforms();
-  }, [open]);
+    fetchPlatforms();
+
+    // Set up real-time subscription for platforms
+    const platformSubscription = supabase
+      .channel('platform-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'platforms' },
+        (payload) => {
+          console.log('Platform change received:', payload);
+          // Refresh platforms list on any change
+          fetchPlatforms();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      platformSubscription.unsubscribe();
+    };
+  }, [open, toast]);
 
   // Update local platforms when prop changes
   useEffect(() => {
