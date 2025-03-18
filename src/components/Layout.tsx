@@ -5,11 +5,27 @@ import { BarChart2, Users, Database, Server, Settings, LogOut } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Check authentication status when layout mounts
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        const localAuth = localStorage.getItem("isAuthenticated") === "true";
+        if (!localAuth) {
+          navigate("/login");
+        }
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
   
   const handleLogout = async () => {
     try {

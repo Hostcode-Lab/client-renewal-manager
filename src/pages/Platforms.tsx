@@ -1,48 +1,16 @@
 
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
-import { Button } from "@/components/ui/button";
-import { PlusIcon, Edit, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { Platform } from "@/types";
 import AddPlatformDialog from "@/components/AddPlatformDialog";
 import EditPlatformDialog from "@/components/EditPlatformDialog";
 import DeletePlatformDialog from "@/components/DeletePlatformDialog";
-
-// Sample platforms data
-const samplePlatforms: Platform[] = [
-  {
-    id: "platform1",
-    name: "Hostcode"
-  },
-  {
-    id: "platform2",
-    name: "Serverlize"
-  }
-];
-
-// Get platforms from localStorage or use sample data
-const getStoredPlatforms = (): Platform[] => {
-  const storedPlatforms = localStorage.getItem('platforms');
-  if (storedPlatforms) {
-    return JSON.parse(storedPlatforms);
-  }
-  return samplePlatforms;
-};
-
-// Save platforms to localStorage
-const savePlatformsToStorage = (platforms: Platform[]) => {
-  localStorage.setItem('platforms', JSON.stringify(platforms));
-};
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { Platform } from "@/types";
+import { getStoredPlatforms, savePlatformsToStorage } from "@/utils/recordUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 const Platforms = () => {
   const { toast } = useToast();
@@ -51,45 +19,132 @@ const Platforms = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load platforms from localStorage on component mount
   useEffect(() => {
-    setPlatforms(getStoredPlatforms());
-  }, []);
+    const fetchPlatforms = async () => {
+      setIsLoading(true);
+      try {
+        const platformsData = await getStoredPlatforms();
+        setPlatforms(platformsData);
+      } catch (error) {
+        console.error("Error fetching platforms:", error);
+        toast({
+          title: "Error loading platforms",
+          description: "There was a problem loading your platforms. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const handleAddPlatform = (newPlatform: Platform) => {
-    const updatedPlatforms = [...platforms, { ...newPlatform, id: Date.now().toString() }];
-    setPlatforms(updatedPlatforms);
-    savePlatformsToStorage(updatedPlatforms);
-    toast({
-      title: "Platform added",
-      description: "The platform has been added successfully.",
-    });
+    fetchPlatforms();
+  }, [toast]);
+
+  const handleAddPlatform = async (newPlatform: Platform) => {
+    const platformWithId = { ...newPlatform, id: crypto.randomUUID() };
+    
+    try {
+      // Add to Supabase directly
+      const { error } = await supabase
+        .from('platforms')
+        .insert({
+          id: platformWithId.id,
+          name: platformWithId.name
+        });
+        
+      if (error) throw error;
+      
+      // Update local state
+      const updatedPlatforms = [...platforms, platformWithId];
+      setPlatforms(updatedPlatforms);
+      
+      // Also update localStorage as fallback
+      await savePlatformsToStorage(updatedPlatforms);
+      
+      toast({
+        title: "Platform added",
+        description: "The platform has been added successfully.",
+      });
+    } catch (error) {
+      console.error("Error adding platform:", error);
+      toast({
+        title: "Error adding platform",
+        description: "There was a problem adding the platform. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     setIsAddDialogOpen(false);
   };
 
-  const handleEditPlatform = (updatedPlatform: Platform) => {
-    const updatedPlatforms = platforms.map(platform => 
-      platform.id === updatedPlatform.id ? updatedPlatform : platform
-    );
-    setPlatforms(updatedPlatforms);
-    savePlatformsToStorage(updatedPlatforms);
-    toast({
-      title: "Platform updated",
-      description: "The platform has been updated successfully.",
-    });
+  const handleEditPlatform = async (updatedPlatform: Platform) => {
+    try {
+      // Update in Supabase directly
+      const { error } = await supabase
+        .from('platforms')
+        .update({ name: updatedPlatform.name })
+        .eq('id', updatedPlatform.id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      const updatedPlatforms = platforms.map(platform => 
+        platform.id === updatedPlatform.id ? updatedPlatform : platform
+      );
+      setPlatforms(updatedPlatforms);
+      
+      // Also update localStorage as fallback
+      await savePlatformsToStorage(updatedPlatforms);
+      
+      toast({
+        title: "Platform updated",
+        description: "The platform has been updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating platform:", error);
+      toast({
+        title: "Error updating platform",
+        description: "There was a problem updating the platform. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     setIsEditDialogOpen(false);
     setSelectedPlatform(null);
   };
 
-  const handleDeletePlatform = (platformId: string) => {
-    const updatedPlatforms = platforms.filter(platform => platform.id !== platformId);
-    setPlatforms(updatedPlatforms);
-    savePlatformsToStorage(updatedPlatforms);
-    toast({
-      title: "Platform deleted",
-      description: "The platform has been deleted successfully.",
-    });
+  const handleDeletePlatform = async (platform: Platform) => {
+    try {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('platforms')
+        .delete()
+        .eq('id', platform.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      const updatedPlatforms = platforms.filter(p => p.id !== platform.id);
+      setPlatforms(updatedPlatforms);
+      
+      // Also update localStorage as fallback
+      await savePlatformsToStorage(updatedPlatforms);
+      
+      toast({
+        title: "Platform deleted",
+        description: "The platform has been deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting platform:", error);
+      toast({
+        title: "Error deleting platform",
+        description: "There was a problem deleting the platform. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     setIsDeleteDialogOpen(false);
     setSelectedPlatform(null);
   };
@@ -108,52 +163,45 @@ const Platforms = () => {
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Platforms</h1>
-            <p className="text-muted-foreground mt-2">Manage your hosting platforms</p>
-          </div>
-          <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Add Platform
+          <h1 className="text-2xl font-bold">Platforms</h1>
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Platform
           </Button>
         </div>
 
-        <Card className="p-4">
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Platform Name</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {platforms.length > 0 ? (
-                  platforms.map((platform) => (
-                    <TableRow key={platform.id}>
-                      <TableCell className="font-medium">{platform.name}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditClick(platform)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(platform)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={2} className="text-center py-6 text-muted-foreground">
-                      No platforms found. Add your first platform!
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+        <Card className="p-6">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-10">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+            </div>
+          ) : platforms.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-gray-500">No platforms added yet.</p>
+              <Button variant="outline" className="mt-4" onClick={() => setIsAddDialogOpen(true)}>
+                Add your first platform
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {platforms.map((platform) => (
+                  <Card key={platform.id} className="p-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-medium">{platform.name}</h3>
+                      <div className="space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => handleEditClick(platform)}>
+                          Edit
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(platform)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 
@@ -184,8 +232,8 @@ const Platforms = () => {
             setIsDeleteDialogOpen(false);
             setSelectedPlatform(null);
           }} 
-          onDelete={() => handleDeletePlatform(selectedPlatform.id)}
-          platformName={selectedPlatform.name}
+          onDelete={handleDeletePlatform}
+          platform={selectedPlatform}
         />
       )}
     </Layout>

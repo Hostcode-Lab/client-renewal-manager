@@ -209,7 +209,7 @@ export const savePlatformsToStorage = async (platforms: Platform[]): Promise<voi
         .from('platforms')
         .select('id')
         .eq('id', platform.id)
-        .single();
+        .maybeSingle();
       
       if (existingPlatform) {
         // Update existing platform
@@ -218,7 +218,10 @@ export const savePlatformsToStorage = async (platforms: Platform[]): Promise<voi
           .update(platformToDbPlatform(platform))
           .eq('id', platform.id);
           
-        if (error) console.error("Error updating platform:", error);
+        if (error) {
+          console.error("Error updating platform:", error);
+          throw error;
+        }
       } else {
         // Insert new platform
         const { error } = await supabase
@@ -228,11 +231,15 @@ export const savePlatformsToStorage = async (platforms: Platform[]): Promise<voi
             ...platformToDbPlatform(platform)
           });
           
-        if (error) console.error("Error inserting platform:", error);
+        if (error) {
+          console.error("Error inserting platform:", error);
+          throw error;
+        }
       }
     }
   } catch (error) {
     console.error("Error in savePlatformsToStorage:", error);
+    throw error;
   }
 };
 
