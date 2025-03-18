@@ -3,8 +3,11 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Layout from "@/components/Layout";
 import { ArrowUpIcon, ArrowDownIcon, Users, IndianRupee, TrendingUp, Percent, AlertCircle } from "lucide-react";
-import { DashboardStats, Record } from "@/types";
+import { DashboardStats, Record, Client } from "@/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { dbRecordToRecord, dbClientToClient } from "@/utils/recordUtils";
 
 // Default stats if none are available
 const defaultStats: DashboardStats = {
@@ -13,15 +16,6 @@ const defaultStats: DashboardStats = {
   monthlyProfit: 0,
   avgProfitPercentage: 0,
   growthPercentage: 0,
-};
-
-// Get stats from localStorage
-const getStoredStats = (): DashboardStats => {
-  const storedStats = localStorage.getItem('dashboardStats');
-  if (storedStats) {
-    return JSON.parse(storedStats);
-  }
-  return defaultStats;
 };
 
 // Calculate stats based on records and selected period
@@ -140,7 +134,9 @@ const Index = () => {
   const [pendingPayments, setPendingPayments] = useState<Record[]>([]);
   const [filterMonth, setFilterMonth] = useState<string>(new Date().getMonth().toString());
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { toast } = useToast();
 
   // Function to get client name by ID
   const getClientNameById = (clientId: string): string => {
@@ -148,23 +144,111 @@ const Index = () => {
     return client ? client.name : "Unknown Client";
   };
 
-  // Load data and calculate stats
+  // Load initial data
   useEffect(() => {
-    // Load records from localStorage
-    const storedRecords = localStorage.getItem('records');
-    if (storedRecords) {
-      const parsedRecords = JSON.parse(storedRecords).map((record: any) => ({
-        ...record,
-        date: new Date(record.date)
-      }));
-      setRecords(parsedRecords);
-    }
-
-    // Load clients
-    const storedClients = localStorage.getItem('clients');
-    if (storedClients) {
-      setClients(JSON.parse(storedClients));
-    }
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch records from Supabase
+        const { data: dbRecords, error: recordsError } = await supabase
+          .from('records')
+          .select('*');
+        
+        if (recordsError) {
+          console.error("Error fetching records:", recordsError);
+          toast({
+            title: "Error",
+            description: "Failed to load records data",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        // Fetch clients from Supabase
+        const { data: dbClients, error: clientsError } = await supabase
+          .from('clients')
+          .select('*');
+        
+        if (clientsError) {
+          console.error("Error fetching clients:", clientsError);
+          toast({
+            title: "Error",
+            description: "Failed to load clients data",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        // Convert DB records to app records
+        const appRecords = dbRecords.map(dbRecordToRecord);
+        const appClients = dbClients.map(dbClientToClient);
+        
+        setRecords(appRecords);
+        setClients(appClients);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [toast]);
+  
+  // Set up real-time subscriptions
+  useEffect(() => {
+    // Subscribe to records changes
+    const recordsChannel = supabase
+      .channel('records-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'records' }, 
+        async (payload) => {
+          console.log('Records change received:', payload);
+          
+          // Refresh all records when any change happens
+          const { data: dbRecords, error } = await supabase
+            .from('records')
+            .select('*');
+          
+          if (!error && dbRecords) {
+            const appRecords = dbRecords.map(dbRecordToRecord);
+            setRecords(appRecords);
+          }
+        }
+      )
+      .subscribe();
+      
+    // Subscribe to clients changes
+    const clientsChannel = supabase
+      .channel('clients-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'clients' }, 
+        async (payload) => {
+          console.log('Clients change received:', payload);
+          
+          // Refresh all clients when any change happens
+          const { data: dbClients, error } = await supabase
+            .from('clients')
+            .select('*');
+          
+          if (!error && dbClients) {
+            const appClients = dbClients.map(dbClientToClient);
+            setClients(appClients);
+          }
+        }
+      )
+      .subscribe();
+    
+    // Cleanup subscriptions on unmount
+    return () => {
+      supabase.removeChannel(recordsChannel);
+      supabase.removeChannel(clientsChannel);
+    };
   }, []);
 
   // Update stats when filters or records change
@@ -216,31 +300,41 @@ const Index = () => {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Active Clients"
-            value={stats.activeClients}
-            icon={Users}
-          />
-          <StatCard
-            title="Monthly Revenue"
-            value={stats.monthlyRevenue}
-            icon={IndianRupee}
-            prefix="₹"
-          />
-          <StatCard
-            title="Monthly Profit"
-            value={stats.monthlyProfit}
-            icon={TrendingUp}
-            prefix="₹"
-          />
-          <StatCard
-            title="Avg Profit Margin"
-            value={stats.avgProfitPercentage}
-            icon={Percent}
-            suffix="%"
-          />
-        </div>
+        {isLoading ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="p-6">
+                <div className="h-20 animate-pulse bg-gray-200 rounded"></div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Active Clients"
+              value={stats.activeClients}
+              icon={Users}
+            />
+            <StatCard
+              title="Monthly Revenue"
+              value={stats.monthlyRevenue}
+              icon={IndianRupee}
+              prefix="₹"
+            />
+            <StatCard
+              title="Monthly Profit"
+              value={stats.monthlyProfit}
+              icon={TrendingUp}
+              prefix="₹"
+            />
+            <StatCard
+              title="Avg Profit Margin"
+              value={stats.avgProfitPercentage}
+              icon={Percent}
+              suffix="%"
+            />
+          </div>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           <Card className="p-6">
