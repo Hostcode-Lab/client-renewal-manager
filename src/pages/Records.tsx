@@ -14,12 +14,11 @@ import DeleteRecordDialog from "@/components/records/DeleteRecordDialog";
 import {
   getStoredClients,
   getStoredPlatforms,
-  getStoredRecords,
-  saveRecordsToStorage,
-  saveClientsToStorage,
   calculateDashboardStats,
-  exportToCSV
+  exportToCSV,
+  dbRecordToRecord
 } from "@/utils/recordUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 const Records = () => {
   const { toast } = useToast();
@@ -36,17 +35,30 @@ const Records = () => {
   const [isFiltered, setIsFiltered] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch records, clients and platforms
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
         const clientsData = await getStoredClients();
         const platformsData = await getStoredPlatforms();
-        const recordsData = await getStoredRecords();
+        
+        // Fetch records directly from Supabase
+        const { data: recordsData, error } = await supabase
+          .from('records')
+          .select('*')
+          .order('date', { ascending: false });
+        
+        if (error) {
+          throw error;
+        }
+        
+        // Convert Supabase records to app records
+        const appRecords = recordsData.map(dbRecordToRecord);
         
         setClients(clientsData);
         setPlatforms(platformsData);
-        setRecords(recordsData);
+        setRecords(appRecords);
       } catch (error) {
         console.error("Error fetching data:", error);
         toast({
@@ -60,8 +72,40 @@ const Records = () => {
     };
     
     fetchData();
+    
+    // Set up real-time subscription for records
+    const subscription = supabase
+      .channel('record-changes')
+      .on('postgres_changes', {
+        event: '*', 
+        schema: 'public',
+        table: 'records'
+      }, async (payload) => {
+        console.log('Real-time update:', payload);
+        
+        // Refresh the records when any change happens
+        const { data: recordsData, error } = await supabase
+          .from('records')
+          .select('*')
+          .order('date', { ascending: false });
+          
+        if (error) {
+          console.error("Error fetching updated records:", error);
+          return;
+        }
+        
+        // Convert and update records state
+        const appRecords = recordsData.map(dbRecordToRecord);
+        setRecords(appRecords);
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(subscription);
+    };
   }, [toast]);
 
+  // Update dashboard stats when records or clients change
   useEffect(() => {
     const stats = calculateDashboardStats(records, clients);
     localStorage.setItem('dashboardStats', JSON.stringify(stats));
@@ -69,94 +113,27 @@ const Records = () => {
 
   const handleAddRecord = async (newRecord: Record) => {
     const recordWithId = { ...newRecord, id: crypto.randomUUID() };
-    const updatedRecords = [...records, recordWithId];
-    setRecords(updatedRecords);
     
-    try {
-      await saveRecordsToStorage(updatedRecords);
-      toast({
-        title: "Record added",
-        description: "The hosting record has been added successfully.",
-      });
-    } catch (error) {
-      console.error("Error saving record:", error);
-      toast({
-        title: "Error saving record",
-        description: "There was a problem saving your record. Please try again.",
-        variant: "destructive",
-      });
-    }
-    
+    // Add to Supabase directly (handled in AddRecordDialog)
+    // Realtime subscription will update the UI
     setIsAddDialogOpen(false);
   };
 
   const handleEditRecord = async (updatedRecord: Record) => {
-    const updatedRecords = records.map(record => 
-      record.id === updatedRecord.id ? updatedRecord : record
-    );
-    setRecords(updatedRecords);
-    
-    try {
-      await saveRecordsToStorage(updatedRecords);
-      toast({
-        title: "Record updated",
-        description: "The hosting record has been updated successfully.",
-      });
-    } catch (error) {
-      console.error("Error updating record:", error);
-      toast({
-        title: "Error updating record",
-        description: "There was a problem updating your record. Please try again.",
-        variant: "destructive",
-      });
-    }
-    
+    // Update handled in EditRecordDialog
+    // Realtime subscription will update the UI
     setIsEditDialogOpen(false);
     setSelectedRecord(null);
   };
 
   const handleDeleteRecord = async (record: Record) => {
-    const updatedRecords = records.filter(r => r.id !== record.id);
-    setRecords(updatedRecords);
-    
-    try {
-      await saveRecordsToStorage(updatedRecords);
-      toast({
-        title: "Record deleted",
-        description: "The hosting record has been deleted successfully.",
-      });
-    } catch (error) {
-      console.error("Error deleting record:", error);
-      toast({
-        title: "Error deleting record",
-        description: "There was a problem deleting your record. Please try again.",
-        variant: "destructive",
-      });
-    }
-    
+    // Delete is now handled in DeleteRecordDialog component
+    // Just update local state to close dialog
     setRecordToDelete(null);
   };
 
   const handleAddClient = async (newClient: Client) => {
-    const clientWithId = { ...newClient, id: crypto.randomUUID() };
-    const updatedClients = [...clients, clientWithId];
-    setClients(updatedClients);
-    
-    try {
-      await saveClientsToStorage(updatedClients);
-      toast({
-        title: "Client added",
-        description: "The client has been added successfully.",
-      });
-    } catch (error) {
-      console.error("Error adding client:", error);
-      toast({
-        title: "Error adding client",
-        description: "There was a problem adding your client. Please try again.",
-        variant: "destructive",
-      });
-    }
-    
+    // Client add is handled in AddClientDialog
     setIsAddClientDialogOpen(false);
   };
 

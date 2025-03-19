@@ -6,6 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Record, Client } from "@/types";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { recordToDbRecord } from "@/utils/recordUtils";
 
 interface EditRecordDialogProps {
   open: boolean;
@@ -16,6 +19,8 @@ interface EditRecordDialogProps {
 }
 
 const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditRecordDialogProps) => {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [date, setDate] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
   const [renewalStatus, setRenewalStatus] = useState<"Renewed" | "Canceled">("Renewed");
@@ -51,8 +56,11 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
     return client.platform;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    
+    const totalProfit = calculateProfit();
     
     const updatedRecord: Record = {
       ...record,
@@ -62,15 +70,44 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
       vendorInvoiceNumber,
       receivedCost: parseFloat(receivedCost) || 0,
       vendorCost: parseFloat(vendorCost) || 0,
-      totalProfit: calculateProfit(),
+      totalProfit,
       paymentStatus
     };
     
-    onUpdate(updatedRecord);
+    try {
+      // Update record directly in Supabase
+      const { error } = await supabase
+        .from('records')
+        .update(recordToDbRecord(updatedRecord))
+        .eq('id', record.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Call the parent's onUpdate function
+      onUpdate(updatedRecord);
+      
+      toast({
+        title: "Record updated",
+        description: "The hosting record has been updated successfully.",
+      });
+      
+      onClose();
+    } catch (error: any) {
+      console.error("Error updating record:", error);
+      toast({
+        title: "Error updating record",
+        description: error.message || "There was a problem updating your record.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Edit Hosting Record</DialogTitle>
@@ -85,6 +122,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -93,6 +131,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
                 value={clientId} 
                 onValueChange={setClientId}
                 required
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="client">
                   <SelectValue placeholder="Select client" />
@@ -114,6 +153,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
               <Select 
                 value={renewalStatus} 
                 onValueChange={(value) => setRenewalStatus(value as "Renewed" | "Canceled")}
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="renewal-status">
                   <SelectValue placeholder="Select status" />
@@ -132,6 +172,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
                 onChange={(e) => setVendorInvoiceNumber(e.target.value)}
                 placeholder="e.g. INV-2023-001"
                 required
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -148,6 +189,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
                 onChange={(e) => setReceivedCost(e.target.value)}
                 placeholder="0.00"
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -161,6 +203,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
                 onChange={(e) => setVendorCost(e.target.value)}
                 placeholder="0.00"
                 required
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -181,6 +224,7 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
               <Select 
                 value={paymentStatus} 
                 onValueChange={(value) => setPaymentStatus(value as "Paid" | "Pending")}
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="payment-status">
                   <SelectValue placeholder="Select status" />
@@ -194,7 +238,9 @@ const EditRecordDialog = ({ open, onClose, onUpdate, record, clients }: EditReco
           </div>
 
           <DialogFooter>
-            <Button type="submit">Update Record</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Updating..." : "Update Record"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

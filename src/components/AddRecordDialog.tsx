@@ -6,6 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Record, Client } from "@/types";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { recordToDbRecord } from "@/utils/recordUtils";
 
 interface AddRecordDialogProps {
   open: boolean;
@@ -15,6 +18,8 @@ interface AddRecordDialogProps {
 }
 
 const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps) => {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [clientId, setClientId] = useState<string>("");
   const [renewalStatus, setRenewalStatus] = useState<"Renewed" | "Canceled">("Renewed");
@@ -29,22 +34,58 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
     return received - cost;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const recordId = crypto.randomUUID();
+    const totalProfit = calculateProfit();
+    
     const newRecord: Record = {
-      id: "",  // This will be set by the parent component
+      id: recordId,
       clientId,
       date: new Date(date),
       renewalStatus,
       vendorInvoiceNumber,
       receivedCost: parseFloat(receivedCost) || 0,
       vendorCost: parseFloat(vendorCost) || 0,
-      totalProfit: calculateProfit(),
+      totalProfit,
       paymentStatus
     };
     
-    onAdd(newRecord);
+    setIsSubmitting(true);
+    
+    try {
+      // Add record directly to Supabase
+      const { error } = await supabase
+        .from('records')
+        .insert({
+          id: recordId,
+          ...recordToDbRecord(newRecord)
+        });
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Call the parent's onAdd function
+      onAdd(newRecord);
+      
+      toast({
+        title: "Record added",
+        description: "The hosting record has been added successfully.",
+      });
+      
+      onClose();
+    } catch (error: any) {
+      console.error("Error adding record:", error);
+      toast({
+        title: "Error adding record",
+        description: error.message || "There was a problem adding your record.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Get platform info for the selected client
@@ -56,7 +97,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Add New Hosting Record</DialogTitle>
@@ -71,6 +112,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -78,6 +120,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
               <Select 
                 value={clientId} 
                 onValueChange={setClientId}
+                disabled={isSubmitting}
                 required
               >
                 <SelectTrigger id="client">
@@ -100,6 +143,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
               <Select 
                 value={renewalStatus} 
                 onValueChange={(value) => setRenewalStatus(value as "Renewed" | "Canceled")}
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="renewal-status">
                   <SelectValue placeholder="Select status" />
@@ -118,6 +162,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
                 onChange={(e) => setVendorInvoiceNumber(e.target.value)}
                 placeholder="e.g. INV-2023-001"
                 required
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -134,6 +179,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
                 onChange={(e) => setReceivedCost(e.target.value)}
                 placeholder="0.00"
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -147,6 +193,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
                 onChange={(e) => setVendorCost(e.target.value)}
                 placeholder="0.00"
                 required
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -167,6 +214,7 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
               <Select 
                 value={paymentStatus} 
                 onValueChange={(value) => setPaymentStatus(value as "Paid" | "Pending")}
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="payment-status">
                   <SelectValue placeholder="Select status" />
@@ -180,7 +228,9 @@ const AddRecordDialog = ({ open, onClose, onAdd, clients }: AddRecordDialogProps
           </div>
 
           <DialogFooter>
-            <Button type="submit">Add Record</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add Record"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

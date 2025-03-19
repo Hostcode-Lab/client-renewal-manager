@@ -10,6 +10,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface DeleteRecordDialogProps {
   open: boolean;
@@ -24,6 +27,50 @@ const DeleteRecordDialog = ({
   onClose,
   onDelete,
 }: DeleteRecordDialogProps) => {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
+  
+  const handleDelete = async () => {
+    if (!record) return;
+    
+    setIsDeleting(true);
+    try {
+      // Delete directly from Supabase
+      const { error } = await supabase
+        .from('records')
+        .delete()
+        .eq('id', record.id);
+        
+      if (error) {
+        console.error("Error deleting record:", error);
+        toast({
+          title: "Error deleting record",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Call the parent callback to update local state
+      onDelete(record);
+      
+      toast({
+        title: "Record deleted",
+        description: "The hosting record has been deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast({
+        title: "Error deleting record",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      onClose();
+    }
+  };
+
   return (
     <AlertDialog open={open} onOpenChange={onClose}>
       <AlertDialogContent>
@@ -34,12 +81,13 @@ const DeleteRecordDialog = ({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
           <AlertDialogAction 
             className="bg-red-500 hover:bg-red-600"
-            onClick={() => record && onDelete(record)}
+            onClick={handleDelete}
+            disabled={isDeleting}
           >
-            Delete
+            {isDeleting ? "Deleting..." : "Delete"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
