@@ -42,6 +42,9 @@ const Login = () => {
         // If Supabase auth fails, try local auth as fallback
         const storedUsername = localStorage.getItem("adminUsername");
         const storedPassword = localStorage.getItem("adminPassword");
+        
+        // These default credentials provide a fallback for first-time setup
+        // In production, you'd want to remove these defaults
         const credentials = {
           username: storedUsername || "admin",
           password: storedPassword || "password123"

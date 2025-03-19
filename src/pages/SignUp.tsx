@@ -8,6 +8,10 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+// List of authorized email domains or specific emails that are allowed to sign up
+const AUTHORIZED_EMAILS = ["admin@example.com", "support@example.com"];
+const AUTHORIZED_DOMAINS = ["yourcompany.com"]; // e.g., anyone with @yourcompany.com email can sign up
+
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,6 +20,22 @@ const SignUp = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Check if the email is authorized to register
+  const isEmailAuthorized = (email: string): boolean => {
+    // Check if the email is in the authorized list
+    if (AUTHORIZED_EMAILS.includes(email.toLowerCase())) {
+      return true;
+    }
+    
+    // Check if the email domain is in the authorized domains list
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (domain && AUTHORIZED_DOMAINS.includes(domain)) {
+      return true;
+    }
+    
+    return false;
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -23,6 +43,16 @@ const SignUp = () => {
       toast({
         title: "Passwords don't match",
         description: "Please make sure your passwords match",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Check if the email is authorized to register
+    if (!isEmailAuthorized(email)) {
+      toast({
+        title: "Unauthorized email",
+        description: "You are not authorized to register with this email address.",
         variant: "destructive",
       });
       return;
